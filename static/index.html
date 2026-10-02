@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:640px;margin:2rem auto;padding:0 1rem;color:#222}
+  form,.filters{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+  input,select,button{padding:.5rem;font-size:1rem}
+  input[name=title]{flex:1;min-width:160px}
+  ul{list-style:none;padding:0}
+  li{display:flex;align-items:center;gap:.5rem;padding:.5rem;border-bottom:1px solid #ddd}
+  li span{flex:1}.done span{text-decoration:line-through;color:#888}
+  .tag{font-size:.75rem;padding:.1rem .4rem;border-radius:4px;background:#eee}
+  .high{background:#fcc}.medium{background:#ffe9a8}.low{background:#cdeccd}
+  #stats{color:#555;margin-bottom:1rem}
+</style>
+</head>
+<body>
+<h1>Задачи</h1>
+<form id="add">
+  <input name="title" placeholder="Новая задача" required maxlength="100">
+  <select name="priority"><option>low</option><option selected>medium</option><option>high</option></select>
+  <button>Добавить</button>
+</form>
+<div class="filters">
+  <input id="search" placeholder="Поиск">
+  <select id="done"><option value="">все</option><option value="false">активные</option><option value="true">выполненные</option></select>
+</div>
+<div id="stats"></div>
+<ul id="list"></ul>
+<p><a href="/docs">Swagger UI</a></p>
+<script>
+const $ = s => document.querySelector(s);
+async function api(path, opts){
+  const r = await fetch(path, opts && {...opts, headers:{'Content-Type':'application/json'}});
+  return r.status === 204 ? null : r.json();
+}
+async function load(){
+  const q = new URLSearchParams();
+  if($('#search').value) q.set('search', $('#search').value);
+  if($('#done').value) q.set('done', $('#done').value);
+  const tasks = await api('/tasks?' + q);
+  $('#list').innerHTML = '';
+  for(const t of tasks){
+    const li = document.createElement('li');
+    li.className = t.done ? 'done' : '';
+    li.innerHTML = `<input type=checkbox ${t.done?'checked':''}><span></span><b class="tag ${t.priority}">${t.priority}</b><button>✕</button>`;
+    li.querySelector('span').textContent = t.title;
+    li.querySelector('input').onchange = async e => { await api('/tasks/'+t.id,{method:'PATCH',body:JSON.stringify({done:e.target.checked})}); load(); };
+    li.querySelector('button').onclick = async () => { await api('/tasks/'+t.id,{method:'DELETE'}); load(); };
+    $('#list').append(li);
+  }
+  const s = await api('/stats');
+  $('#stats').textContent = `Всего: ${s.total}, выполнено: ${s.done}, осталось: ${s.pending}`;
+}
+$('#add').onsubmit = async e => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  await api('/tasks',{method:'POST',body:JSON.stringify({title:f.get('title'),priority:f.get('priority')})});
+  e.target.reset(); load();
+};
+$('#search').oninput = load; $('#done').onchange = load;
+load();
+</script>
+</body>
+</html>
